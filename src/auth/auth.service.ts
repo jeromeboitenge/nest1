@@ -37,38 +37,66 @@ export class AuthService {
   }
 
   async login(credentials: CreateLoginDto) {
-    const userExist = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { email: credentials.email },
     });
 
-    if (!userExist) {
+    if (!user) {
       throw new UnauthorizedException('Wrong credentials');
     }
 
-    const passwordMatch = await bcrypt.compare(
-      credentials.password,
-      userExist.password
-    );
-
+    const passwordMatch = await bcrypt.compare(credentials.password, user.password);
     if (!passwordMatch) {
       throw new UnauthorizedException('Wrong credentials');
     }
 
-    // ✅ Call generateTokens correctly
-    const token = await this.generateTokens(userExist.id);
+    //  Generate tokens
+    const tokens = await this.generateTokens(user.id);
+
+    //  Hash and save the refresh token
+    const hashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 12);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { refreshToken: hashedRefreshToken },
+    });
 
     return {
-      token,
+      tokens,
       message: 'Login successful',
     };
   }
 
+  // Generate both access and refresh tokens
   async generateTokens(userId: string) {
-    const accessToken = this.jwtService.sign(
-      { userId },
-      { expiresIn: '1h' }
-    );
+    const payload = { sub: userId };
 
-    return { accessToken };
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+
+    return { accessToken, refreshToken };
+  }
+
+  // Validate refresh token and issue a new access token
+  async refreshTokens(userId: string, refreshToken: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.refreshToken) {
+      throw new UnauthorizedException('Access denied');
+    }
+
+    const isMatch = await bcrypt.compare(refreshToken, user.refreshToken);
+    if (!isMatch) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const tokens = await this.generateTokens(user.id);
+    const hashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 12);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { refreshToken: hashedRefreshToken },
+    });
+
+    return tokens;
   }
 }
