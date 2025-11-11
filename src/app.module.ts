@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { UserModule } from './user/user.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
-import { LoginModule } from './login/login.module';
 import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
@@ -13,7 +12,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     PrismaModule,
     UserModule,
     AuthModule,
-    LoginModule,
+
 
     JwtModule.registerAsync({
       imports: [ConfigModule],

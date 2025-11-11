@@ -1,8 +1,8 @@
 import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateSignupDto } from 'src/signup/dto/create-signup.dto';
+import { CreateSignupDto } from 'src/auth/dto/create-signup.dto';
 import * as bcrypt from 'bcrypt';
-import { CreateLoginDto } from 'src/login/dto/create-login.dto';
+import { CreateLoginDto } from './dto/create-auth.dto';
 import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
@@ -51,15 +51,7 @@ export class AuthService {
     }
 
     //  Generate tokens
-    const tokens = await this.generateTokens(user.id);
-
-    //  Hash and save the refresh token
-    const hashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 12);
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { refreshToken: hashedRefreshToken },
-    });
+    const tokens = await this.generateTokens(user.id, user.role, user.email);
 
     return {
       tokens,
@@ -68,8 +60,8 @@ export class AuthService {
   }
 
   // Generate both access and refresh tokens
-  async generateTokens(userId: string) {
-    const payload = { sub: userId };
+  async generateTokens(userId: string, userRole: string, email: string) {
+    const payload = { sub: userId, userRole: userRole, email: email };
 
     const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
@@ -77,26 +69,4 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  // Validate refresh token and issue a new access token
-  async refreshTokens(userId: string, refreshToken: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user || !user.refreshToken) {
-      throw new UnauthorizedException('Access denied');
-    }
-
-    const isMatch = await bcrypt.compare(refreshToken, user.refreshToken);
-    if (!isMatch) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-
-    const tokens = await this.generateTokens(user.id);
-    const hashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 12);
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { refreshToken: hashedRefreshToken },
-    });
-
-    return tokens;
-  }
 }
