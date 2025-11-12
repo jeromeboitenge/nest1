@@ -15,4 +15,8 @@ export class AuthController {
   async login(@Body() credentials: CreateLoginDto) {
     return this.authService.login(credentials)
   }
+  @Post('verify-otp')
+  verifyOtp(@Body() body: { email: string; otp: string }) {
+    return this.authService.verifyOtp(body.email, body.otp);
+  }
 }
